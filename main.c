@@ -1,0 +1,605 @@
+
+/*
+ * PrototypeCS120B.c
+ *
+ * Created: 12/1/2019 3:58:35 PM
+ * Author : Jenaro Vega
+ */ 
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include "simAVRHeader.h"
+#include <avr/pgmspace.h>
+#include <stdint.h>
+#include <util/delay.h>
+#include "nokia5110.h"
+#include "timer.h"
+#include "structs.h"
+
+///////////////////////////////////////////////////////////////////////////////////
+//Nokia5110 chars
+///////////////////////////////////////////////////////////////////////////////////
+
+
+const uint8_t CHARSET[][5] PROGMEM = {
+	{ 0x00, 0x00, 0x00, 0x00, 0x00 }, // 20 space
+	{ 0x00, 0x00, 0x5f, 0x00, 0x00 }, // 21 !
+	{ 0x00, 0x07, 0x00, 0x07, 0x00 }, // 22 "
+	{ 0x14, 0x7f, 0x14, 0x7f, 0x14 }, // 23 #
+	{ 0x24, 0x2a, 0x7f, 0x2a, 0x12 }, // 24 $
+	{ 0x23, 0x13, 0x08, 0x64, 0x62 }, // 25 %
+	{ 0x36, 0x49, 0x55, 0x22, 0x50 }, // 26 &
+	{ 0x00, 0x05, 0x03, 0x00, 0x00 }, // 27 '
+	{ 0x00, 0x1c, 0x22, 0x41, 0x00 }, // 28 (
+	{ 0x00, 0x41, 0x22, 0x1c, 0x00 }, // 29 )
+	{ 0x14, 0x08, 0x3e, 0x08, 0x14 }, // 2a *
+	{ 0x08, 0x08, 0x3e, 0x08, 0x08 }, // 2b +
+	{ 0x00, 0x50, 0x30, 0x00, 0x00 }, // 2c ,
+	{ 0x08, 0x08, 0x08, 0x08, 0x08 }, // 2d -
+	{ 0x00, 0x60, 0x60, 0x00, 0x00 }, // 2e .
+	{ 0x20, 0x10, 0x08, 0x04, 0x02 }, // 2f /
+	{ 0x3e, 0x51, 0x49, 0x45, 0x3e }, // 30 0
+	{ 0x00, 0x42, 0x7f, 0x40, 0x00 }, // 31 1
+	{ 0x42, 0x61, 0x51, 0x49, 0x46 }, // 32 2
+	{ 0x21, 0x41, 0x45, 0x4b, 0x31 }, // 33 3
+	{ 0x18, 0x14, 0x12, 0x7f, 0x10 }, // 34 4
+	{ 0x27, 0x45, 0x45, 0x45, 0x39 }, // 35 5
+	{ 0x3c, 0x4a, 0x49, 0x49, 0x30 }, // 36 6
+	{ 0x01, 0x71, 0x09, 0x05, 0x03 }, // 37 7
+	{ 0x36, 0x49, 0x49, 0x49, 0x36 }, // 38 8
+	{ 0x06, 0x49, 0x49, 0x29, 0x1e }, // 39 9
+	{ 0x00, 0x36, 0x36, 0x00, 0x00 }, // 3a :
+	{ 0x00, 0x56, 0x36, 0x00, 0x00 }, // 3b ;
+	{ 0x08, 0x14, 0x22, 0x41, 0x00 }, // 3c <
+	{ 0x14, 0x14, 0x14, 0x14, 0x14 }, // 3d =
+	{ 0x00, 0x41, 0x22, 0x14, 0x08 }, // 3e >
+	{ 0x02, 0x01, 0x51, 0x09, 0x06 }, // 3f ?
+	{ 0x32, 0x49, 0x79, 0x41, 0x3e }, // 40 @
+	{ 0x7e, 0x11, 0x11, 0x11, 0x7e }, // 41 A
+	{ 0x7f, 0x49, 0x49, 0x49, 0x36 }, // 42 B
+	{ 0x3e, 0x41, 0x41, 0x41, 0x22 }, // 43 C
+	{ 0x7f, 0x41, 0x41, 0x22, 0x1c }, // 44 D
+	{ 0x7f, 0x49, 0x49, 0x49, 0x41 }, // 45 E
+	{ 0x7f, 0x09, 0x09, 0x09, 0x01 }, // 46 F
+	{ 0x3e, 0x41, 0x49, 0x49, 0x7a }, // 47 G
+	{ 0x7f, 0x08, 0x08, 0x08, 0x7f }, // 48 H
+	{ 0x00, 0x41, 0x7f, 0x41, 0x00 }, // 49 I
+	{ 0x20, 0x40, 0x41, 0x3f, 0x01 }, // 4a J
+	{ 0x7f, 0x08, 0x14, 0x22, 0x41 }, // 4b K
+	{ 0x7f, 0x40, 0x40, 0x40, 0x40 }, // 4c L
+	{ 0x7f, 0x02, 0x0c, 0x02, 0x7f }, // 4d M
+	{ 0x7f, 0x04, 0x08, 0x10, 0x7f }, // 4e N
+	{ 0x3e, 0x41, 0x41, 0x41, 0x3e }, // 4f O
+	{ 0x7f, 0x09, 0x09, 0x09, 0x06 }, // 50 P
+	{ 0x3e, 0x41, 0x51, 0x21, 0x5e }, // 51 Q
+	{ 0x7f, 0x09, 0x19, 0x29, 0x46 }, // 52 R
+	{ 0x46, 0x49, 0x49, 0x49, 0x31 }, // 53 S
+	{ 0x01, 0x01, 0x7f, 0x01, 0x01 }, // 54 T
+	{ 0x3f, 0x40, 0x40, 0x40, 0x3f }, // 55 U
+	{ 0x1f, 0x20, 0x40, 0x20, 0x1f }, // 56 V
+	{ 0x3f, 0x40, 0x38, 0x40, 0x3f }, // 57 W
+	{ 0x63, 0x14, 0x08, 0x14, 0x63 }, // 58 X
+	{ 0x07, 0x08, 0x70, 0x08, 0x07 }, // 59 Y
+	{ 0x61, 0x51, 0x49, 0x45, 0x43 }, // 5a Z
+	{ 0x00, 0x7f, 0x41, 0x41, 0x00 }, // 5b [
+	{ 0x02, 0x04, 0x08, 0x10, 0x20 }, // 5c backslash
+	{ 0x00, 0x41, 0x41, 0x7f, 0x00 }, // 5d ]
+	{ 0x04, 0x02, 0x01, 0x02, 0x04 }, // 5e ^
+	{ 0x40, 0x40, 0x40, 0x40, 0x40 }, // 5f _
+	{ 0x00, 0x01, 0x02, 0x04, 0x00 }, // 60 `
+	{ 0x20, 0x54, 0x54, 0x54, 0x78 }, // 61 a
+	{ 0x7f, 0x48, 0x44, 0x44, 0x38 }, // 62 b
+	{ 0x38, 0x44, 0x44, 0x44, 0x20 }, // 63 c
+	{ 0x38, 0x44, 0x44, 0x48, 0x7f }, // 64 d
+	{ 0x38, 0x54, 0x54, 0x54, 0x18 }, // 65 e
+	{ 0x08, 0x7e, 0x09, 0x01, 0x02 }, // 66 f
+	{ 0x0c, 0x52, 0x52, 0x52, 0x3e }, // 67 g
+	{ 0x7f, 0x08, 0x04, 0x04, 0x78 }, // 68 h
+	{ 0x00, 0x44, 0x7d, 0x40, 0x00 }, // 69 i
+	{ 0x20, 0x40, 0x44, 0x3d, 0x00 }, // 6a j
+	{ 0x7f, 0x10, 0x28, 0x44, 0x00 }, // 6b k
+	{ 0x00, 0x41, 0x7f, 0x40, 0x00 }, // 6c l
+	{ 0x7c, 0x04, 0x18, 0x04, 0x78 }, // 6d m
+	{ 0x7c, 0x08, 0x04, 0x04, 0x78 }, // 6e n
+	{ 0x38, 0x44, 0x44, 0x44, 0x38 }, // 6f o
+	{ 0x7c, 0x14, 0x14, 0x14, 0x08 }, // 70 p
+	{ 0x08, 0x14, 0x14, 0x18, 0x7c }, // 71 q
+	{ 0x7c, 0x08, 0x04, 0x04, 0x08 }, // 72 r
+	{ 0x48, 0x54, 0x54, 0x54, 0x20 }, // 73 s
+	{ 0x04, 0x3f, 0x44, 0x40, 0x20 }, // 74 t
+	{ 0x3c, 0x40, 0x40, 0x20, 0x7c }, // 75 u
+	{ 0x1c, 0x20, 0x40, 0x20, 0x1c }, // 76 v
+	{ 0x3c, 0x40, 0x30, 0x40, 0x3c }, // 77 w
+	{ 0x44, 0x28, 0x10, 0x28, 0x44 }, // 78 x
+	{ 0x0c, 0x50, 0x50, 0x50, 0x3c }, // 79 y
+	{ 0x44, 0x64, 0x54, 0x4c, 0x44 }, // 7a z
+	{ 0x00, 0x08, 0x36, 0x41, 0x00 }, // 7b {
+	{ 0x00, 0x00, 0x7f, 0x00, 0x00 }, // 7c |
+	{ 0x00, 0x41, 0x36, 0x08, 0x00 }, // 7d }
+	{ 0x10, 0x08, 0x08, 0x10, 0x08 }, // 7e ~
+	{ 0x00, 0x00, 0x00, 0x00, 0x00 } // 7f
+};
+
+
+///////////////////////////////////////////////////////////////////////
+//ADC Functions
+///////////////////////////////////////////////////////////////////////
+void ADC_init(){
+	ADCSRA |= (1 << ADEN) | (1 << ADSC) | (1 << ADATE);
+}
+
+unsigned short ReadADC(unsigned char ch){
+	ch = ch & 0x07;
+	ADMUX = (ADMUX & 0xF8) | ch;
+	
+	ADCSRA |= (1<<ADSC);
+
+	while(!(ADCSRA & (1<<ADIF)));
+	
+	//		ADCSRA |= (1<<ADIF);
+	
+	return(ADC);
+}
+
+
+
+///////////////////////////////////////////////////////////////////////
+//State Machines
+///////////////////////////////////////////////////////////////////////
+unsigned char _left = 0;
+unsigned char _right = 0;
+unsigned char _up = 0;
+unsigned char _down = 0;
+unsigned char led = 0x00;
+
+unsigned short x;
+unsigned short y;
+
+void js(){
+	x = ReadADC(0);
+	y = ReadADC(1);
+	if(x > 900){
+		led = 0x08;
+		_left = 1; //left
+	}
+	else if(x < 300){
+		led = 0x04; //right
+		_right = 1;
+	}
+	else if(y < 300){
+		led = 0x02; //up
+		_up = 1;
+	}
+	else if(y > 900 ){
+		led = 0x01; //down
+		_down = 1;
+	}
+	else{
+		led = 0x00;
+		_left = 0;
+		_right = 0;
+		_down = 0;
+		_up = 0;
+	}
+}
+/////////////////////////////////////
+// win/lose flags
+////////////////////////////////////
+unsigned char fail = 0; // flag for losing
+unsigned char win = 0; // flag for winning
+unsigned char cheat = 0;
+////////////////////////////////////
+
+
+void nokia_menu(char cursor){
+	nokia_lcd_clear();
+	nokia_lcd_set_cursor(16, 1);
+	nokia_lcd_write_string("R E A C T",1);
+	nokia_lcd_set_cursor(7, 10);
+	nokia_lcd_write_string("1.Easy", 1);
+	nokia_lcd_set_cursor(7, 20);
+	nokia_lcd_write_string("2.Meduim", 1);
+	nokia_lcd_set_cursor(7, 30);
+	nokia_lcd_write_string("3.Hard", 1);
+	nokia_lcd_set_cursor(7, 40);
+	nokia_lcd_write_string("4.Expert!!!", 1);
+	
+	nokia_lcd_set_cursor(1, cursor);
+	nokia_lcd_write_string("$", 1);
+	nokia_lcd_render();	
+}
+
+struct game_score highScore[88] = {{"0"},{"1"},{"2"},{"3"},{"4"},{"5"},{"6"},{"7"},{"8"},{"9"},{"10"},{"11"},{"12"},{"13"},{"14"},{"15"},{"16"},{"18"},{"20"},{"22"},{"24"},{"26"},{"28"},
+	{"30"},{"32"},{"34"},{"36"},{"40"},{"44"},{"48"},{"52"},{"56"},{"60"},{"64"},{"68"},{"72"},{"76"},{"80"},{"84"},{"88"},{"92"},{"100"},{"108"},{"116"},{"124"},{"132"},{"140"},{"148"},{"156"},{"164"},
+	{"172"},{"180"},{"188"},{"196"},{"204"},{"212"},{"220"},{"230"},{"240"},{"250"},{"260"},{"270"},{"280"},{"290"},{"300"},{"310"},{"320"},{"340"},{"350"},{"360"},{"370"},{"380"},{"390"},{"400"},{"500"},{"600"},{"700"},{"800"},{"900"},{"1000"},{"1100"},
+	{"1200"},{"1300"},{"1400"},{"1500"},{"1600"},{"1700"},{"1800"},{"2000"} }; 
+//unsigned char health[10] = "xxxxxxxxxx";
+struct health_bar arr_health[12] = {{""},{"x"},{"xx"},{"xxx"},{"xxxx"},{"xxxxx"},{"xxxxxx"},{"xxxxxxx"},{"xxxxxxxx"},{"xxxxxxxxx"},{"xxxxxxxxxx"},{}};
+	unsigned char life = 10;
+void nokia_play(char number, char index, unsigned char point){
+	nokia_lcd_clear();
+	if(number == 0){
+		nokia_lcd_set_cursor(20, 1);
+		nokia_lcd_write_string("Easy",2);
+	}
+	else if(number == 1){
+		nokia_lcd_set_cursor(12, 1);
+		nokia_lcd_write_string("Medium",2);
+	}
+	else if(number == 2){
+		nokia_lcd_set_cursor(20, 1);
+		nokia_lcd_write_string("Hard",2);
+	}
+	else{
+		nokia_lcd_set_cursor(16, 1);
+		nokia_lcd_write_string("Expert",2);
+		cheat = 1;
+	}
+	nokia_lcd_set_cursor(7, 20);
+	nokia_lcd_write_string("Health:",1);
+	nokia_lcd_set_cursor(4, 30);
+	
+	
+	nokia_lcd_write_string(arr_health[index].xs,1);
+	nokia_lcd_set_cursor(4, 40);
+	nokia_lcd_write_string("SCORE: ",1);
+	nokia_lcd_set_cursor(50,40 );
+	nokia_lcd_write_string(highScore[point].points,1);
+	
+	if(index == 0){
+		nokia_lose(point);
+	}
+	nokia_lcd_render();
+}
+
+void nokia_lose(unsigned char hs){
+	nokia_lcd_clear();
+	nokia_lcd_set_cursor(12, 1);
+	nokia_lcd_write_string("U LOSE",2);
+	nokia_lcd_set_cursor(5, 20);
+	nokia_lcd_write_string("Score: ", 1);
+	nokia_lcd_write_string(highScore[hs].points, 1);
+	
+	nokia_lcd_set_cursor(0, 35);
+	nokia_lcd_write_string("Press Green", 1);
+	fail = 1;
+	nokia_lcd_render();
+}
+
+void nokia_win(unsigned char hi_){
+	nokia_lcd_clear();
+	nokia_lcd_set_cursor(12, 1);
+	nokia_lcd_write_string("U WIN",2);
+	nokia_lcd_set_cursor(5, 20);
+	nokia_lcd_write_string("Score: ", 1);
+	nokia_lcd_write_string(highScore[hi_].points, 1);
+	
+	nokia_lcd_set_cursor(0, 35);
+	nokia_lcd_write_string("Press Green", 1);
+	win = 1;
+	nokia_lcd_render();
+}
+
+
+int main(void) {
+	DDRC = 0xFF; PORTC = 0x00;
+	DDRB = 0xFF; PORTB = 0x00;
+	DDRA = 0x00; PORTA = 0xFF;
+	DDRD = 0xFF; PORTD = 0x00;
+	unsigned char menu_design_sz = 1;
+	
+	struct menu_led pattern[1] = {
+		{0x00,0xFF,129}
+	};
+	
+	struct arrow game1[25] = { //initialize symbols for LED Matrix //25 symbols
+		{'L',{0xEF,0xCF,0x81,0xCF,0xEF},{0x04,0x08,0x10,0x20,0x40},5},
+	    {'D',{0xF7,0xF7,0xF7,0xC1,0xE3,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'U',{0xF7,0xE3,0xC1,0xF7,0xF7,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'D',{0xF7,0xF7,0xF7,0xC1,0xE3,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'L',{0xEF,0xCF,0x81,0xCF,0xEF},{0x04,0x08,0x10,0x20,0x40},5},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'U',{0xF7,0xE3,0xC1,0xF7,0xF7,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'D',{0xF7,0xF7,0xF7,0xC1,0xE3,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'U',{0xF7,0xE3,0xC1,0xF7,0xF7,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'D',{0xF7,0xF7,0xF7,0xC1,0xE3,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'L',{0xEF,0xCF,0x81,0xCF,0xEF},{0x04,0x08,0x10,0x20,0x40},5},
+		{'D',{0xF7,0xF7,0xF7,0xC1,0xE3,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'U',{0xF7,0xE3,0xC1,0xF7,0xF7,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'D',{0xF7,0xF7,0xF7,0xC1,0xE3,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},	
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'L',{0xEF,0xCF,0x81,0xCF,0xEF},{0x04,0x08,0x10,0x20,0x40},5},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'U',{0xF7,0xE3,0xC1,0xF7,0xF7,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'D',{0xF7,0xF7,0xF7,0xC1,0xE3,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+	};
+		
+	struct arrow game2[8] = { //initialize symbols for LED Matrix
+		{'L',{0xEF,0xCF,0x81,0xCF,0xEF},{0x04,0x08,0x10,0x20,0x40},5},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'U',{0xF7,0xE3,0xC1,0xF7,0xF7,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'D',{0xF7,0xF7,0xF7,0xC1,0xE3,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'L',{0xEF,0xCF,0x81,0xCF,0xEF},{0x04,0x08,0x10,0x20,0x40},5},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5},
+		{'U',{0xF7,0xE3,0xC1,0xF7,0xF7,0xF7},{0x02,0x04,0x08,0x10,0x20,0x40},6},
+		{'R',{0xF7,0xF3,0x81,0xF3,0xF7},{0x04,0x08,0x10,0x20,0x40},5}
+	};
+	
+	struct game levels[4] = {
+		{"easy",700,1},
+		{"medium",600,2},
+		{"hard",500,3},
+		{"expert",600,4}
+	};
+
+	unsigned char j = 0;// ensures one symbol is displayed at a time
+	unsigned char l = 0; //for cheat mode replaces j
+	unsigned char k = 0; //individual hex values for each symbol displayed 
+	unsigned short i = 0;  //calls for arrows during gameplay
+	unsigned char playing = 0;// tells us we are playing -flag
+	unsigned char menu = 1; //tells us we are still on menu -flag
+	unsigned char num; // used to index the corresponding game from arrays based on difficulty chosen
+	unsigned char game_play = 0;
+	unsigned char playing_var = 0;
+	unsigned char high_score = 0;
+	unsigned char life_lost  = 0;
+	unsigned char got_it = 0;
+	
+	unsigned short timer_speed = 200;
+	unsigned short every_10s = 0;
+	unsigned char lvl_sub = 3;// 2
+	unsigned long sec_50 = 0;
+	
+	ADC_init();
+	
+	TimerSet(1);
+	TimerOn();
+	nokia_lcd_init();
+	unsigned char cursor = 10;
+	
+	while (1) {
+		if(PINA == 0xF7){
+			nokia_lcd_clear();
+			i = 0;
+			j = 0;
+			k = 0;
+			l = 0;
+			num = 0;
+			menu = 1;
+			playing = 0;
+			fail = 0;
+			life = 10;
+			cursor = 10;
+			lvl_sub = 2;
+			high_score = 0;
+			life_lost = 0;
+			got_it = 0;
+			timer_speed = 200;
+			cheat = 0;
+		}
+		
+		if(i == 100 && menu){
+			js();
+			if(_up && cursor == 10){
+				//cursor = 30;
+				cursor = 40;
+			}
+			else if(_up && cursor <= 40){//<= 30
+				cursor = cursor - 10;
+			}
+			else if(_down && cursor == 40){// ==30
+				cursor = 10;
+			}
+			else if(_down && cursor >= 10){
+				cursor = cursor + 10;
+			}
+		}
+		
+		if(i == 200 && menu){ //handles cursor in menu every 200ms
+			nokia_menu(cursor);
+			if(PINA == 0xFB){ //if a game level is chosen
+				menu = !menu;
+				num = (cursor/10) - 1; // num is used to index the correct array for the level chosen
+				if(num == 3){
+					cheat = 1;
+				}
+			}
+			i = 0;
+		}
+		
+		if(!menu && i == 200 && !playing){
+			nokia_play(num, life,high_score); // fail var -> life
+			timer_speed = levels[num].gamespeed;
+			every_10s = 0;
+			playing = 1;
+			sec_50 = 0;
+			i = 0;
+			j = 0;
+			k = 0;
+		}
+		
+		
+		if(playing && ((i % 100) == 0) && !cheat){
+			js();
+			if(game1[j].name == 'L'){
+				if(_left == 1){
+					got_it = 1;
+				}
+				else{
+					life_lost = 1;
+				}
+			}
+			else if(game1[j].name == 'R'){
+				if(_right == 1){
+					got_it = 1;
+				}
+				else{
+					life_lost = 1;
+				}
+			}
+			else if(game1[j].name == 'U'){
+				if(_up == 1){
+					got_it = 1;
+				}
+				else{
+					life_lost = 1;
+				}
+			}
+			else if(game1[j].name == 'D'){
+				if(_down == 1){
+					got_it = 1;
+				}
+				else{
+					life_lost = 1;
+				}
+			}
+		}
+		
+		if(playing && ((i % 100) == 0) && cheat){ //for cheat mode
+			js();
+			if(game2[l].name == 'L'){
+				if(_left == 1){
+					got_it = 1;
+				}
+				else{
+					life_lost = 1;
+				}
+			}
+			else if(game2[l].name == 'R'){
+				if(_right == 1){
+					got_it = 1;
+				}
+				else{
+					life_lost = 1;
+				}
+			}
+			else if(game2[l].name == 'U'){
+				if(_up == 1){
+					got_it = 1;
+				}
+				else{
+					life_lost = 1;
+				}
+			}
+			else if(game2[l].name == 'D'){
+				if(_down == 1){
+					got_it = 1;
+				}
+				else{
+					life_lost = 1;
+				}
+			}
+		}
+		
+		if(i == timer_speed && playing && !fail && !win){
+			if(every_10s >= 10000){ //every ten seconds the game speeds up
+				if(!(lvl_sub == 0)){
+					lvl_sub = lvl_sub - 1;
+					timer_speed = timer_speed - 100;
+				}
+				every_10s = 0;
+			}
+			if(got_it){
+				high_score = high_score + 1;
+			}
+			else{
+				life = life - 1;
+			}
+			nokia_play(num, life,high_score);
+			got_it = 0;
+			life_lost = 0;
+			j++;
+			l++;
+			if(cheat){
+				if(l == 8 && !fail){
+					nokia_win(high_score);
+					win = 1;
+					l = 0;
+				}
+			}
+			else if(j == 25){
+				j = 0;
+			}
+			i = 0; //restarts timer to enter this if statement 
+		}
+		
+		if(high_score == 88){
+			win = 1;
+			nokia_win(high_score);
+		}
+		if(sec_50 == 50000 && playing){
+			win = 1;
+			nokia_win(high_score);
+		}
+		
+		if((fail || win) && i == 100){ //reset once player has won or lost if green button is pressed
+			if(PINA == 0xEF){
+				pattern[0].pb = 0xFF;
+				l = 0;
+				j = 0;//
+				k = 0;//
+				
+				menu = 1;
+				playing = 0;
+				fail = 0;
+				win = 0;
+				life = 10;
+				cursor = 10;
+				high_score = 0;
+				got_it = 0;
+				life_lost = 0;
+				cheat = 0;
+				num = 0;
+			}
+			i = 0; //resets counter
+			
+		}
+
+	if(i == 100 && menu){ //for menu every 100ms
+		PORTB = pattern[0].pb;
+		PORTC = pattern[0].pc ;
+	}
+		
+	if(menu){ //For menu
+	    pattern[0].pb = pattern[0].pb - 1;
+		if(pattern[0].pb == 0 && menu){
+			pattern[0].pb = 0xFF;
+		}
+	}
+		if(playing && !cheat){
+			PORTB = game1[j].arr_B[k];
+			PORTC = game1[j].arr_C[k];
+		}
+		
+		if(playing && cheat){
+			PORTB = game2[l].arr_B[k];
+			PORTC = game2[l].arr_C[k];
+		}
+		if(playing && sec_50 <= 40000){
+			sec_50 = sec_50 + 1;
+		}
+		//increments for counters
+		i = i + 1; //for checks
+		every_10s = every_10s + 1; //for game
+		k = k + 1;
+		
+		if(k == game1[j].length && !cheat){ // makes sure each symbol iteration doesn't go out of bounds
+			k = 0; //for game
+		}
+		
+		if(k == game2[l].length && cheat){ // makes sure each symbol iteration doesn't go out of bounds
+			k = 0; //for game cheat
+		}
+		while(!TimerFlag);
+		TimerFlag = 0;
+ 	}
+	return 1;
+}
+
+
